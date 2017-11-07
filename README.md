@@ -1,2 +1,2 @@
 # rzne
-Computing based on services (Racunarsvo zasnovano na uslugama) 
+Computing based on services (Racunarsvo zasnovano na uslugama)
