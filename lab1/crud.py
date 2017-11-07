@@ -6,6 +6,7 @@ import hug
 import sqlalchemy as sa
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
 
 Base = declarative_base()
 
@@ -15,22 +16,32 @@ logger.setLevel(logging.INFO)
   Helper Methods
 """
 
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+
+salt = b'\n\x11\xa5\xdd\x0fq\xf8p=[\xae\xe2V\xde\xd9\xb2'
+kdf = PBKDF2HMAC(
+    algorithm=hashes.SHA256(),
+    length=32,
+    salt=salt,
+    iterations=100000,
+    backend=default_backend())
+
 
 class User(Base):
     __tablename__ = 'users'
     id = sa.Column(sa.Integer, primary_key=True)
-    name = sa.Column(sa.String)
-    salt = sa.Column(sa.String)
-    hash = sa.Column(sa.String)
+    name = sa.Column(sa.String, unique=True)
+    salt = sa.Column(sa.BLOB)
+    hash = sa.Column(sa.BLOB)
 
     def __repr__(self):
         return f"<User(name={self.name}, salt={self.salt}, hash={self.hash})>"
 
 
-if __name__ == "__main__":
-    print("I'm the main nigga")
-    engine = create_engine('sqlite:////tmp/foo.db')
-    Base.metadata.create_all(engine)
+engine = create_engine('sqlite:////tmp/foo.db')
+Session = sessionmaker(bind=engine)
 
 
 def hash_password(password, salt):
@@ -40,33 +51,8 @@ def hash_password(password, salt):
     :param salt:
     :return: Hex encoded SHA512 hash of provided password
     """
-    password = str(password).encode('utf-8')
-    salt = str(salt).encode('utf-8')
-    return hashlib.sha512(password + salt).hexdigest()
-
-
-@hug.cli()
-def authenticate_user(username, password):
-    """
-    Authenticate a username and password against our database
-    :param username:
-    :param password:
-    :return: authenticated username
-    """
-    user_model = Query()
-    user = engine.get(user_model.username == username)
-
-    if not user:
-        logger.warning("User %s not found", username)
-        return False
-
-    if user['password'] == hash_password(password, user.get('salt')):
-        return user['username']
-
-    return False
-
-
-basic_authentication = hug.authentication.basic(authenticate_user)
+    password = kdf.derive(password.encode("UTF-8"))
+    return hashlib.sha512(password + salt).digest()
 
 
 @hug.cli()
@@ -78,40 +64,18 @@ def add_user(username, password):
     :return: JSON status output
     """
 
-    user_model = Query()
-    if db.search(user_model.username == username):
-        return {'error': 'User {0} already exists'.format(username)}
+    salt = hashlib.sha512(str(os.urandom(64)).encode('utf-8')).digest()
+    password_hash = hash_password(password, salt)
+    user = User(
+        name=username,
+        salt=salt,
+        hash=password_hash,
+    )
+    session = Session()
+    session.add(user)
+    session.commit()
 
-    salt = hashlib.sha512(str(os.urandom(64)).encode('utf-8')).hexdigest()
-    password = hash_password(password, salt)
-
-    user = {
-        'username': username,
-        'password': password,
-        'salt': salt,
-    }
-    user_id = db.insert(user)
-
-    return {'result': 'success', 'eid': user_id, 'user_created': user}
-
-
-@hug.get('/api/get_api_key', requires=basic_authentication)
-def get_token(authed_user: hug.directives.user):
-    """
-    Get Job details
-    :param authed_user:
-    :return:
-    """
-    user_model = Query()
-    user = db.search(user_model.username == authed_user)[0]
-
-    if user:
-        out = {'user': user['username'], 'api_key': user['api_key']}
-    else:
-        # this should never happen
-        out = {'error': 'User {0} does not exist'.format(authed_user)}
-
-    return out
+    return {'result': 'success', 'eid': user.id, 'user_created': user}
 
 
 if __name__ == '__main__':
