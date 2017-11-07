@@ -59,7 +59,7 @@ def hash_password(password, salt):
         algorithm=hashes.SHA512(),
         length=32,
         salt=salt,
-        iterations=100000,
+        iterations=1 if "CI" in os.environ else 100000,
         backend=default_backend())
     return hashlib.sha512(kdf.derive(password.encode("UTF-8"))).digest()
 
@@ -92,8 +92,9 @@ basic_authentication = hug.authentication.basic(authenticate_user)
 ###
 
 
-@hug.cli()
 @hug.post('/user/{username}', requires=basic_authentication)
+@hug.cli()
+@hug.local()
 def add_user(username, password, response=None):
     """
     CLI Parameter to add a user to the database
@@ -199,12 +200,13 @@ def update_note(user: hug.directives.user, id: int, text: str, response):
 
 
 @hug.delete('/note/{id}', requires=basic_authentication)
-def update_note(user: hug.directives.user, id: str, response):
+def delete_note(user: hug.directives.user, id: str, response):
     session = Session()
     note: Notes = session.query(Notes).filter(Notes.id == id).first()
     if not note:
         logger.warning(f"Note with id {id} not found")
         response.status = falcon.HTTP_404
+        return
 
     if note.owner_id != user.id:
         logger.warning(f"Note with id {id} not owned by {user.name}")
@@ -216,7 +218,7 @@ def update_note(user: hug.directives.user, id: str, response):
 
 
 @hug.get('/note/{id}')
-def update_note(id: str, response):
+def get_note(id: str, response):
     session = Session()
     note: Notes = session.query(Notes).filter(Notes.id == id).first()
     if not note:
