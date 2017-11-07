@@ -8,7 +8,6 @@ from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 
 Base = declarative_base()
-engine = create_engine('sqlite:///tmp/foo.db')
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -28,7 +27,10 @@ class User(Base):
         return f"<User(name={self.name}, salt={self.salt}, hash={self.hash})>"
 
 
-Base.metadata.create_all(engine)
+if __name__ == "__main__":
+    print("I'm the main nigga")
+    engine = create_engine('sqlite:////tmp/foo.db')
+    Base.metadata.create_all(engine)
 
 
 def hash_password(password, salt):
@@ -110,19 +112,6 @@ def get_token(authed_user: hug.directives.user):
         out = {'error': 'User {0} does not exist'.format(authed_user)}
 
     return out
-
-
-# Same thing, but authenticating against an API key
-@hug.get(('/api/job', '/api/job/{job_id}/'), requires=api_key_authentication)
-def get_job_details(job_id):
-    """
-    Get Job details
-    :param job_id:
-    :return:
-    """
-    job = {'job_id': job_id, 'details': 'Details go here'}
-
-    return job
 
 
 if __name__ == '__main__':
