@@ -94,13 +94,18 @@ basic_authentication = hug.authentication.basic(authenticate_user)
 
 @hug.cli()
 @hug.post('/user/{username}', requires=basic_authentication)
-def add_user(username, password):
+def add_user(username, password, response=None):
     """
     CLI Parameter to add a user to the database
     :param username:
     :param password:
     :return: JSON status output
     """
+
+    session = Session()
+    if session.query(User).filter(User.name == username).first() is not None:
+        response.status = falcon.HTTP_400
+        return "Username exists"
 
     salt = hashlib.sha512(str(os.urandom(64)).encode('utf-8')).digest()
     password_hash = hash_password(password, salt)
@@ -109,11 +114,13 @@ def add_user(username, password):
         salt=salt,
         hash=password_hash,
     )
-    session = Session()
+
     session.add(user)
     session.commit()
-
-    return {'result': 'success', 'eid': user.id, 'user_created': user}
+    if response is not None:
+        response.status = falcon.HTTP_201
+        response._headers['Location'] = f"/user/{username}"
+    return {'result': 'success', 'eid': user.id}
 
 
 @hug.get('/test_auth', requires=basic_authentication)
@@ -145,7 +152,7 @@ def del_user(username: str, response):
 ###
 
 
-@hug.get('/users/{username}/notes')
+@hug.get('/user/{username}/notes')
 def list_notes(username: str, response):
     session = Session()
     user: User = session.query(User).filter(User.name == username).first()
@@ -154,19 +161,21 @@ def list_notes(username: str, response):
         response.status = falcon.HTTP_404
         return
 
-    return user.notes
+    return {x.id: x.text for x in user.notes}
 
 
-@hug.post('/notes', requires=basic_authentication)
+@hug.post('/note', requires=basic_authentication)
 def new_note(user: hug.directives.user, text: str, response):
     session = Session()
     note = Notes(text=text, owner_id=user.id)
     session.add(note)
     session.commit()
+    response.status = falcon.HTTP_201
+    response._headers['Location'] = f'/note/{note.id}'
     return {'id': note.id}
 
 
-@hug.put('/notes/{id}', requires=basic_authentication)
+@hug.put('/note/{id}', requires=basic_authentication)
 def update_note(user: hug.directives.user, id: int, text: str, response):
     session = Session()
     note: Notes = session.query(Notes).filter(Notes.id == id).first()
@@ -176,6 +185,7 @@ def update_note(user: hug.directives.user, id: int, text: str, response):
         session.add(note)
         session.commit()
         response.status = falcon.HTTP_201
+        response._headers['Location'] = f'/note/{id}'
         return {'id': note.id}
 
     if note.owner_id != user.id:
@@ -188,7 +198,7 @@ def update_note(user: hug.directives.user, id: int, text: str, response):
     return {'id': note.id}
 
 
-@hug.delete('/notes/{id}', requires=basic_authentication)
+@hug.delete('/note/{id}', requires=basic_authentication)
 def update_note(user: hug.directives.user, id: str, response):
     session = Session()
     note: Notes = session.query(Notes).filter(Notes.id == id).first()
@@ -203,6 +213,17 @@ def update_note(user: hug.directives.user, id: str, response):
 
     session.delete(note)
     session.commit()
+
+
+@hug.get('/note/{id}')
+def update_note(id: str, response):
+    session = Session()
+    note: Notes = session.query(Notes).filter(Notes.id == id).first()
+    if not note:
+        logger.warning(f"Note with id {id} not found")
+        response.status = falcon.HTTP_404
+        return
+    return note.text
 
 
 if __name__ == '__main__':
