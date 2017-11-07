@@ -78,5 +78,35 @@ def add_user(username, password):
     return {'result': 'success', 'eid': user.id, 'user_created': user}
 
 
+@hug.cli()
+def authenticate_user(username, password):
+    """
+    Authenticate a username and password against our database
+    :param username:
+    :param password:
+    :return: authenticated username
+    """
+    session = Session()
+    user: User = session.query(User).filter(User.name == username).first()
+
+    if not user:
+        logger.warning("User %s not found", username)
+        return False
+
+    if user.hash == hash_password(password, user.salt):
+        return user
+
+    return False
+
+
+basic_authentication = hug.authentication.basic(authenticate_user)
+
+
+@hug.get('/test_auth', requires=basic_authentication)
+def basic_auth_api_call(user: hug.directives.user):
+    """Testing whether authenticated calls work"""
+    return f'Successfully authenticated with user: {user}'
+
+
 if __name__ == '__main__':
     add_user.interface.cli()
