@@ -161,7 +161,7 @@ class TestNotes(unittest.TestCase):
             headers={
                 'Authorization': 'Basic dGVzdDp0ZXN0'
             })
-        self.assertEqual(resp.status, falcon.HTTP_401)
+        self.assertEqual(resp.status, falcon.HTTP_403)
         resp = hug.test.get(crud, f'/note/1')
         self.assertEqual(resp.status, falcon.HTTP_200)
         self.assertEqual(resp.data, "asd is happy")
@@ -171,7 +171,7 @@ class TestNotes(unittest.TestCase):
             crud, '/note/1', headers={
                 'Authorization': 'Basic dGVzdDp0ZXN0'
             })
-        self.assertEqual(resp.status, falcon.HTTP_401)
+        self.assertEqual(resp.status, falcon.HTTP_403)
         resp = hug.test.get(crud, f'/note/1')
         self.assertEqual(resp.status, falcon.HTTP_200)
         self.assertEqual(resp.data, "asd is happy")

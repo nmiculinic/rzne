@@ -191,7 +191,7 @@ def update_note(user: hug.directives.user, id: int, text: str, response):
 
     if note.owner_id != user.id:
         logger.warning(f"Note with id {id} not owned by {user.name}")
-        response.status = falcon.HTTP_401
+        response.status = falcon.HTTP_403
         return
 
     note.text = text
@@ -210,7 +210,7 @@ def delete_note(user: hug.directives.user, id: str, response):
 
     if note.owner_id != user.id:
         logger.warning(f"Note with id {id} not owned by {user.name}")
-        response.status = falcon.HTTP_401
+        response.status = falcon.HTTP_403
         return
 
     session.delete(note)
